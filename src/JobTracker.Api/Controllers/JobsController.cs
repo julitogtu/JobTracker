@@ -1,11 +1,13 @@
 using Asp.Versioning;
+using JobTracker.Application.Jobs.Commands.CompleteJob;
 using JobTracker.Application.Jobs.Commands.CreateJob;
+using JobTracker.Application.Jobs.Commands.StartJob;
 using Microsoft.AspNetCore.Mvc;
 
 namespace JobTracker.Api.Controllers;
 
 [ApiVersion("1.0")]
-public class JobsV1Controller : ApiControllerBase
+public class JobsController : ApiControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetJobs()
@@ -28,5 +30,21 @@ public class JobsV1Controller : ApiControllerBase
             {
                 id = result.Value
             });
+    }
+
+    [HttpPost("complete")]
+    public async Task<IActionResult> CompleteJob([FromBody] CompleteJobCommand command)
+    {
+        var result = await Mediator.Send(command);
+
+        return result.IsFailure ? ToProblem(result.Error) : NoContent();
+    }
+
+    [HttpPost("start")]
+    public async Task<IActionResult> StartJob([FromBody] StartJobCommand command)
+    {
+        var result = await Mediator.Send(command);
+
+        return result.IsFailure ? ToProblem(result.Error) : NoContent();
     }
 }

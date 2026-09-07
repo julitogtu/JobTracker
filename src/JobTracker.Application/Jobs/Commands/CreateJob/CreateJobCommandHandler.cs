@@ -6,15 +6,10 @@ using MediatR;
 
 namespace JobTracker.Application.Jobs.Commands.CreateJob;
 
-internal sealed class CreateJobCommandHandler(
-    IJobRepository jobRepository,
-    IUnitOfWork unitOfWork,
-    TimeProvider timeProvider)
+internal sealed class CreateJobCommandHandler(IJobRepository jobRepository, IUnitOfWork unitOfWork, TimeProvider timeProvider)
     : IRequestHandler<CreateJobCommand, Result<Guid>>
 {
-    public async Task<Result<Guid>> Handle(
-        CreateJobCommand command,
-        CancellationToken cancellationToken)
+    public async Task<Result<Guid>> Handle(CreateJobCommand command, CancellationToken cancellationToken)
     {
         try
         {
@@ -37,12 +32,9 @@ internal sealed class CreateJobCommandHandler(
                 scheduledDate: command.ScheduledDateUtc,
                 assigneeId: command.AssigneeId);
 
-            await jobRepository.AddAsync(
-                job,
-                cancellationToken);
+            await jobRepository.AddAsync(job, cancellationToken);
 
-            await unitOfWork.SaveChangesAsync(
-                cancellationToken);
+            await unitOfWork.SaveChangesAsync( cancellationToken);
 
             return Result<Guid>.Success(job.Id);
         }

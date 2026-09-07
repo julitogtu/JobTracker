@@ -16,9 +16,7 @@ internal sealed partial class JobRepository(JobsDbContext dbContext) : IJobRepos
         CancellationToken cancellationToken = default) =>
         dbContext.Jobs
             .Include(job => job.Photos)
-            .SingleOrDefaultAsync(
-                job => job.OrganizationId == organizationId && job.Id == jobId,
-                cancellationToken);
+            .SingleOrDefaultAsync(job => job.OrganizationId == organizationId && job.Id == jobId, cancellationToken);
 
     public async Task AddAsync(Job job, CancellationToken cancellationToken = default)
     {

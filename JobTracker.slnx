@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/Solution Items/">
     <File Path="Directory.Packages.props" />
+    <File Path="docker-compose.yaml" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/JobTracker.Api/JobTracker.Api.csproj" />
@@ -8,5 +9,7 @@
     <Project Path="src/JobTracker.Domain/JobTracker.Domain.csproj" Id="bd15f2ae-cac8-45c7-99d9-9b7d191570c1" />
     <Project Path="src/JobTracker.Persistence/JobTracker.Persistence.csproj" Id="5f73adec-fb22-4d1a-8b7a-a7af4bd63f41" />
   </Folder>
-  <Folder Name="/tests/" />
+  <Folder Name="/tests/">
+    <Project Path="tests/JobTracker.Tests/JobTracker.Tests.csproj" Id="683606d7-9e1c-48b7-b3d1-1d3bf5f36af8" />
+  </Folder>
 </Solution>

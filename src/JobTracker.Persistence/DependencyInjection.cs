@@ -1,4 +1,5 @@
-﻿using JobTracker.Application.Common.Persistence;
+﻿using JobTracker.Application.Common.Messaging;
+using JobTracker.Application.Common.Persistence;
 using JobTracker.Domain.Jobs;
 using JobTracker.Persistence.Database;
 using JobTracker.Persistence.Outbox;
@@ -26,6 +27,7 @@ public static class DependencyInjection
 
         services.AddScoped<IJobRepository, JobRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IOutboxMessagePublisher, OutboxMessagePublisher>();
         services.AddScoped<OutboxMessageProcessor>();
 
         return services;

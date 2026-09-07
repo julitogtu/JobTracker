@@ -224,20 +224,17 @@ public sealed class Job : AggregateRoot
 
     private void EnsureNotTerminal()
     {
-        if (Status is JobStatus.Completed or JobStatus.Cancelled)
+        if (Status is not JobStatus.Completed and not JobStatus.Cancelled)
         {
-            throw new DomainException($"A {Status} job is terminal and cannot transition to another state.");
+            return;
         }
+
+        throw new DomainException($"A {Status} job is terminal and cannot transition to another state.");
     }
 
     private static Guid RequiredId(Guid value, string parameterName)
     {
-        if (value == Guid.Empty)
-        {
-            throw new ArgumentException("The ID cannot be empty.", parameterName);
-        }
-
-        return value;
+        return value == Guid.Empty ? throw new ArgumentException("The ID cannot be empty.", parameterName) : value;
     }
 
     private static string Required(string value, string parameterName, int maxLength)
@@ -249,23 +246,17 @@ public sealed class Job : AggregateRoot
 
         var normalized = value.Trim();
 
-        if (normalized.Length > maxLength)
-        {
-            throw new ArgumentException($"The value cannot exceed {maxLength} characters.", parameterName);
-        }
-
-        return normalized;
+        return normalized.Length > maxLength
+            ? throw new ArgumentException($"The value cannot exceed {maxLength} characters.", parameterName)
+            : normalized;
     }
 
     private static string RequiredAbsoluteUrl(string value, string parameterName)
     {
         var normalized = Required(value, parameterName, 2_048);
 
-        if (!Uri.TryCreate(normalized, UriKind.Absolute, out _))
-        {
-            throw new ArgumentException("The value must be an absolute URL.", parameterName);
-        }
-
-        return normalized;
+        return !Uri.TryCreate(normalized, UriKind.Absolute, out _)
+            ? throw new ArgumentException("The value must be an absolute URL.", parameterName)
+            : normalized;
     }
 }

@@ -5,8 +5,13 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var connectionString =
+    builder.Configuration.GetConnectionString("JobsDatabase")
+    ?? throw new InvalidOperationException(
+        "Connection string JobsDatabase was not configured.");
+
 builder.Services.AddApplication();
-builder.Services.AddPersistence(builder.Configuration.GetConnectionString("DefaultConnection")!);
+builder.Services.AddPersistence(connectionString);
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddApiVersioning(options =>
@@ -41,13 +46,12 @@ builder.Services.AddRateLimiter(options =>
             factory: partition => new FixedWindowRateLimiterOptions
             {
                 AutoReplenishment = true,
-                PermitLimit = 10,
+                PermitLimit = 2,
                 QueueLimit = 0,
                 Window = TimeSpan.FromMinutes(1)
             }));
 });
 
-//builder.Services.AddMvc();
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())

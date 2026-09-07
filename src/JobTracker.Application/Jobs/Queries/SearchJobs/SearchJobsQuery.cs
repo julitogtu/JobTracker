@@ -1,7 +1,15 @@
-﻿using MediatR;
+﻿using JobTracker.Domain.Enums;
+using MediatR;
 
 namespace JobTracker.Application.Jobs.Queries.SearchJobs;
 
-public class SearchJobsQuery : IRequest<IReadOnlyList<JobDto>>
-{
-}
+public sealed record SearchJobsQuery(
+    Guid OrganizationId,
+    string? SearchTerm = null,
+    IReadOnlyCollection<JobStatus>? Statuses = null,
+    DateTimeOffset? ScheduledFromUtc = null,
+    DateTimeOffset? ScheduledToUtc = null,
+    Guid? AssigneeId = null,
+    string? Cursor = null,
+    int PageSize = 25)
+    : IRequest<PagedList<JobDto>>;

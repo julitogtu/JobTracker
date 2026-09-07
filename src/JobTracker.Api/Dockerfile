@@ -12,7 +12,11 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
+COPY ["Directory.Packages.props", "."]
 COPY ["src/JobTracker.Api/JobTracker.Api.csproj", "src/JobTracker.Api/"]
+COPY ["src/JobTracker.Application/JobTracker.Application.csproj", "src/JobTracker.Application/"]
+COPY ["src/JobTracker.Domain/JobTracker.Domain.csproj", "src/JobTracker.Domain/"]
+COPY ["src/JobTracker.Persistence/JobTracker.Persistence.csproj", "src/JobTracker.Persistence/"]
 RUN dotnet restore "./src/JobTracker.Api/JobTracker.Api.csproj"
 COPY . .
 WORKDIR "/src/src/JobTracker.Api"

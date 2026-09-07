@@ -1,5 +1,5 @@
 using Asp.Versioning;
-using JobTracker.Application.Jobs.Queries.SearchJobs;
+using JobTracker.Application.Jobs.Commands.CreateJob;
 using Microsoft.AspNetCore.Mvc;
 
 namespace JobTracker.Api.Controllers;
@@ -10,18 +10,23 @@ public class JobsV1Controller : ApiControllerBase
     [HttpGet]
     public async Task<IActionResult> GetJobs()
     {
-        var query = new SearchJobsQuery();
-        return Ok("message test");
+        return Ok();
     }
-}
 
-[ApiVersion("2.0")]
-public class JobsV2Controller : ApiControllerBase
-{
-    [HttpGet]
-    public async Task<IActionResult> GetJobs()
+    [HttpPost]
+    public async Task<IActionResult> CreateJob([FromBody] CreateJobCommand command)
     {
-        var query = new SearchJobsQuery();
-        return Ok(await Mediator.Send(query));
+        var result = await Mediator.Send(command);
+
+        if (result.IsFailure)
+        {
+            return ToProblem(result.Error);
+        }
+
+        return StatusCode(StatusCodes.Status201Created,
+            new
+            {
+                id = result.Value
+            });
     }
 }

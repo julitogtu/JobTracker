@@ -4,13 +4,12 @@ using JobTracker.Persistence.Database;
 using JobTracker.Persistence.Outbox;
 using JobTracker.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 
-namespace JobTracker.Persistence;
+namespace Microsoft.Extensions.DependencyInjection;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddJobsPersistence(this IServiceCollection services, string connectionString)
+    public static IServiceCollection AddPersistence(this IServiceCollection services, string connectionString)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 

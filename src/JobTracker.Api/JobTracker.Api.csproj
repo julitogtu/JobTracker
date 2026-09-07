@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\JobTracker.Application\JobTracker.Application.csproj" />
+    <ProjectReference Include="..\JobTracker.Persistence\JobTracker.Persistence.csproj" />
   </ItemGroup>
 
 </Project>

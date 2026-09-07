@@ -6,6 +6,7 @@ using System.Threading.RateLimiting;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddApplication();
+builder.Services.AddPersistence(builder.Configuration.GetConnectionString("DefaultConnection")!);
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddApiVersioning(options =>

@@ -13,4 +13,8 @@
     <PackageReference Include="Microsoft.Extensions.Configuration" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\JobTracker.Domain\JobTracker.Domain.csproj" />
+  </ItemGroup>
+
 </Project>

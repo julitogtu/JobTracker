@@ -1,12 +1,12 @@
-﻿using MediatR;
+﻿using JobTracker.Domain.Enums;
+using MediatR;
 
 namespace JobTracker.Application.Jobs.Queries.SearchJobs;
 
-public class SearchJobsQueryHandler : IRequestHandler<SearchJobsQuery, IReadOnlyList<JobDto>>
+public class SearchJobsQueryHandler : IRequestHandler<SearchJobsQuery, PagedList<JobDto>>
 {
-    public async Task<IReadOnlyList<JobDto>> Handle(SearchJobsQuery request, CancellationToken cancellationToken)
+    public async Task<PagedList<JobDto>> Handle(SearchJobsQuery request, CancellationToken cancellationToken)
     {
-        var jobs = new List<JobDto>();
-        return await Task.FromResult(jobs);
+        return await Task.FromResult(new PagedList<JobDto>(new List<JobDto>(), null, request.PageSize));
     }
 }   

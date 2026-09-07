@@ -1,4 +1,6 @@
 ﻿using JobTracker.Domain.Common;
+using JobTracker.Domain.Jobs.Events;
+using JobTracker.Domain.Jobs.IntegrationEvents;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Text.Json;
@@ -21,40 +23,61 @@ public sealed class InsertOutboxMessagesInterceptor : SaveChangesInterceptor
         return base.SavingChangesAsync(eventData, result, cancellationToken);
     }
 
-    private static void InsertOutboxMessages(DbContext? dbContext)
+    private static void InsertOutboxMessages(
+        DbContext? dbContext)
     {
         if (dbContext is null)
             return;
 
-        var aggregates = dbContext.ChangeTracker
+        var completedEvents = dbContext.ChangeTracker
             .Entries<AggregateRoot>()
-            .Select(entry => entry.Entity)
-            .Where(aggregate => aggregate.DomainEvents.Count > 0)
+            .SelectMany(entry =>
+                entry.Entity.DomainEvents
+                    .OfType<JobCompletedDomainEvent>()
+                    .Select(domainEvent => new
+                    {
+                        Aggregate = entry.Entity,
+                        DomainEvent = domainEvent
+                    }))
             .ToArray();
 
-        if (aggregates.Length == 0)
+        if (completedEvents.Length == 0)
             return;
 
-        var alreadyTrackedIds = dbContext.ChangeTracker
+        var trackedMessageIds = dbContext.ChangeTracker
             .Entries<OutboxMessage>()
             .Select(entry => entry.Entity.Id)
             .ToHashSet();
 
-        var messages = aggregates
-            .SelectMany(aggregate => aggregate.DomainEvents)
-            .Where(domainEvent => !alreadyTrackedIds.Contains(domainEvent.EventId))
-            .Select(domainEvent => OutboxMessage.Create(
-                domainEvent.EventId,
-                domainEvent.GetType().FullName ?? throw new InvalidOperationException("A domain event must have a stable type name."),
-                JsonSerializer.Serialize(domainEvent, domainEvent.GetType(), SerializerOptions),
-                domainEvent.OccurredOnUtc))
-            .ToArray();
-
-        dbContext.Set<OutboxMessage>().AddRange(messages);
-
-        foreach (var aggregate in aggregates)
+        foreach (var item in completedEvents)
         {
-            aggregate.ClearDomainEvents();
+            var domainEvent = item.DomainEvent;
+
+            if (!trackedMessageIds.Contains(domainEvent.EventId))
+            {
+                var integrationEvent = CreateIntegrationEvent(domainEvent);
+
+                var outboxMessage = OutboxMessage.Create(
+                    id: integrationEvent.EventId,
+                    type: typeof(JobCompletedIntegrationEvent).FullName!,
+                    content: JsonSerializer.Serialize(integrationEvent,SerializerOptions),
+                    occurredOnUtc: integrationEvent.OccurredOnUtc);
+
+                dbContext.Set<OutboxMessage>().Add(outboxMessage);
+
+                trackedMessageIds.Add(integrationEvent.EventId);
+            }
+
+            item.Aggregate.RemoveDomainEvent(domainEvent);
         }
     }
+
+    private static JobCompletedIntegrationEvent CreateIntegrationEvent(JobCompletedDomainEvent domainEvent)
+        => new JobCompletedIntegrationEvent(
+            EventId: domainEvent.EventId,
+            JobId: domainEvent.JobId,
+            OrganizationId: domainEvent.OrganizationId,
+            CustomerId: domainEvent.CustomerId,
+            CompletedAtUtc: domainEvent.CompletedAtUtc,
+            OccurredOnUtc: domainEvent.OccurredOnUtc);
 }

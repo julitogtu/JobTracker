@@ -19,10 +19,8 @@ public static class DependencyInjection
 
         services.AddDbContext<JobsDbContext>((serviceProvider, options) =>
         {
-            options.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsAssembly(typeof(JobsDbContext).Assembly.GetName().Name!));
-            options.AddInterceptors(
-                serviceProvider.GetRequiredService<InsertOutboxMessagesInterceptor>());
+            options.UseNpgsql(connectionString, npgsql => npgsql.MigrationsAssembly(typeof(JobsDbContext).Assembly.GetName().Name!));
+            options.AddInterceptors(serviceProvider.GetRequiredService<InsertOutboxMessagesInterceptor>());
         });
 
         services.AddScoped<IJobRepository, JobRepository>();

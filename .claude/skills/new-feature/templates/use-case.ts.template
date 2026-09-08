@@ -1,0 +1,9 @@
+import type { __PASCAL__Input, JobRepository } from '@/domain/repositories/job.repository';
+
+export class __PASCAL__UseCase {
+  constructor(private readonly jobs: JobRepository) {}
+
+  execute(input: __PASCAL__Input): Promise<__USE_CASE_RESULT__> {
+    return this.jobs.__REPO_METHOD__(input);
+  }
+}

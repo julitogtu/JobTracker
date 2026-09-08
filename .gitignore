@@ -386,6 +386,10 @@ test-results/
 *.dmg
 *.app
 
+# The *.app rule above (macOS bundles) also matches the JobTracker.App project
+# directory on case-insensitive filesystems, which would hide the whole Next.js app.
+!/src/JobTracker.App/
+
 # content below from: https://github.com/github/gitignore/blob/master/Global/macOS.gitignore
 # General
 .DS_Store

@@ -1,0 +1,86 @@
+'use client';
+
+import { useCallback, useMemo, useState, useTransition } from 'react';
+
+import { __CAMEL__Action } from '@/application/actions/job.actions';
+import { JobStatus, __GUARD__, type Job } from '@/domain/entities/job.entity';
+import { useJobsStore } from '@/presentation/stores/jobs-store.provider';
+
+export interface Use__PASCAL__Result {
+  target: Job | null;
+  error: string | null;
+  validationError: string | null;
+  canSubmit: boolean;
+  showStatusWarning: boolean;
+  isPending: boolean;
+  open: (job: Job) => void;
+  close: () => void;
+  confirm: () => void;
+}
+
+export function use__PASCAL__(): Use__PASCAL__Result {
+  const [target, setTarget] = useState<Job | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const beginStatusChange = useJobsStore((state) => state.beginStatusChange);
+  const commitStatusChange = useJobsStore((state) => state.commitStatusChange);
+  const rollbackStatusChange = useJobsStore((state) => state.rollbackStatusChange);
+
+  // Mirrors __VALIDATOR__ on the API side. Drop this block if the operation takes no payload.
+  const validationError = useMemo<string | null>(() => null, []);
+
+  const canSubmit = useMemo(
+    () => target !== null && __GUARD__(target.status) && validationError === null && !isPending,
+    [target, validationError, isPending],
+  );
+
+  const showStatusWarning = useMemo(
+    () => target !== null && !__GUARD__(target.status),
+    [target],
+  );
+
+  const open = useCallback((job: Job): void => {
+    setTarget(job);
+    setError(__GUARD__(job.status) ? null : '__STATUS_MESSAGE__');
+  }, []);
+
+  const close = useCallback((): void => {
+    setTarget(null);
+    setError(null);
+  }, []);
+
+  /**
+   * Optimistic update: flip the row to __TARGET_STATUS__ immediately, then commit on success
+   * or roll back to the captured previous status on failure.
+   */
+  const confirm = useCallback((): void => {
+    if (target === null || validationError !== null) {
+      return;
+    }
+
+    const jobId = target.id;
+    const token = beginStatusChange(jobId, JobStatus.__TARGET_STATUS__);
+    setError(null);
+
+    startTransition(async () => {
+      const result = await __CAMEL__Action({ jobId });
+
+      result.ok
+        ? (commitStatusChange(token), setTarget(null))
+        : (rollbackStatusChange(token), setError(result.error));
+    });
+  }, [target, validationError, beginStatusChange, commitStatusChange, rollbackStatusChange]);
+
+  return {
+    target,
+    error,
+    validationError,
+    canSubmit,
+    showStatusWarning,
+    isPending,
+    open,
+    close,
+    confirm,
+  };
+}

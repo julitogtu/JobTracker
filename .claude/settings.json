@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && out=$(dotnet build --nologo -v q 2>&1) || { echo \"$out\" >&2; exit 2; }",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/build-check.sh\"",
             "timeout": 180,
             "statusMessage": "Building solution..."
           }

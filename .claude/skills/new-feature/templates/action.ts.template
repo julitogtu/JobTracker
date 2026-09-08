@@ -1,0 +1,15 @@
+export async function __CAMEL__Action(
+  payload: __PASCAL__Payload,
+): Promise<ActionResult<__ACTION_DATA__>> {
+  try {
+    await getContainer().__CAMEL__.execute({
+      organizationId: organizationId(),
+      jobId: payload.jobId__EXTRA_ARGS__,
+    });
+
+    revalidatePath('/jobs');
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  }
+}

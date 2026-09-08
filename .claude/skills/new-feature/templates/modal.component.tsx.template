@@ -1,0 +1,37 @@
+'use client';
+
+import { Modal } from '@/presentation/components/molecules/modal.component';
+import type { Use__PASCAL__Result } from '../../hooks/use-__KEBAB__.hook';
+
+/** Thin shell -- all state and handlers live in use-__KEBAB__.hook. */
+export function __PASCAL__Modal({ controller }: { controller: Use__PASCAL__Result }) {
+  const { target, error, canSubmit, showStatusWarning, isPending, close, confirm } = controller;
+
+  return (
+    <Modal
+      isOpen={target !== null}
+      title={target === null ? '__LABEL__' : `__LABEL__ "${target.title}"`}
+      onClose={close}
+      footer={
+        <>
+          <button type="button" className="btn btn--ghost" onClick={close} disabled={isPending}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn--primary" onClick={confirm} disabled={!canSubmit}>
+            {isPending ? '__PENDING_LABEL__' : '__LABEL__'}
+          </button>
+        </>
+      }
+    >
+      {showStatusWarning ? (
+        <p className="alert alert--warn">__STATUS_MESSAGE__ This one is not, so the API would return 409.</p>
+      ) : null}
+
+      <p className="hint">
+        The row flips to __TARGET_STATUS__ immediately and rolls back if the API rejects the change.
+      </p>
+
+      {error === null ? null : <p className="alert alert--error">{error}</p>}
+    </Modal>
+  );
+}

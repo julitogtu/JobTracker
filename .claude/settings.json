@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && out=$(dotnet build --nologo -v q 2>&1) || { echo \"$out\" >&2; exit 2; }",
+            "timeout": 180,
+            "statusMessage": "Building solution..."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+    [HttpPost("__ROUTE__")]
+    public async Task<IActionResult> __NAME__([FromBody] __NAME__Command command)
+    {
+        var result = await Mediator.Send(command);
+
+        return result.IsFailure ? ToProblem(result.Error) : NoContent();
+    }

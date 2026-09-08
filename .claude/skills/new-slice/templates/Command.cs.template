@@ -1,0 +1,9 @@
+using JobTracker.Application.Common.Results;
+using MediatR;
+
+namespace JobTracker.Application.Jobs.Commands.__NAME__;
+
+public sealed record __NAME__Command(
+    Guid OrganizationId,
+    Guid JobId__EXTRA_PARAMS__)
+    : IRequest<Result<__RESULT__>>;

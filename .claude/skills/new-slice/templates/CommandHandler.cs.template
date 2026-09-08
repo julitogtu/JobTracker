@@ -1,0 +1,51 @@
+using JobTracker.Application.Common.Persistence;
+using JobTracker.Application.Common.Results;
+using JobTracker.Domain.Common;
+using JobTracker.Domain.Enums;
+using JobTracker.Domain.Jobs;
+using MediatR;
+
+namespace JobTracker.Application.Jobs.Commands.__NAME__;
+
+internal sealed class __NAME__CommandHandler(
+    IJobRepository jobRepository,
+    IUnitOfWork unitOfWork,
+    TimeProvider timeProvider)
+    : IRequestHandler<__NAME__Command, Result<__RESULT__>>
+{
+    public async Task<Result<__RESULT__>> Handle(__NAME__Command command, CancellationToken cancellationToken)
+    {
+        var job = await jobRepository.GetByIdAsync(
+            command.OrganizationId,
+            command.JobId,
+            cancellationToken);
+
+        if (job is null)
+        {
+            return Result<__RESULT__>.Failure(
+                Error.NotFound("Jobs.__OP__.NotFound", $"Job '{command.JobId}' was not found."));
+        }
+
+        if (job.Status != JobStatus.__REQUIRED_STATUS__)
+        {
+            return Result<__RESULT__>.Failure(
+                Error.Conflict(
+                    "Jobs.__OP__.InvalidStatus",
+                    $"Only a __REQUIRED_STATUS__ job can be __PAST_TENSE__. Current status: {job.Status}."));
+        }
+
+        try
+        {
+            job.__AGGREGATE_METHOD__(timeProvider.GetUtcNow()__EXTRA_ARGS__);
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return Result<__RESULT__>.Success(Unit.Value);
+        }
+        catch (DomainException exception)
+        {
+            return Result<__RESULT__>.Failure(
+                Error.Conflict("Jobs.__OP__.DomainError", exception.Message));
+        }
+    }
+}

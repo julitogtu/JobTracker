@@ -1,0 +1,15 @@
+using FluentValidation;
+
+namespace JobTracker.Application.Jobs.Commands.__NAME__;
+
+internal sealed class __NAME__CommandValidator : AbstractValidator<__NAME__Command>
+{
+    public __NAME__CommandValidator()
+    {
+        RuleFor(command => command.OrganizationId)
+            .NotEmpty();
+
+        RuleFor(command => command.JobId)
+            .NotEmpty();
+    }
+}

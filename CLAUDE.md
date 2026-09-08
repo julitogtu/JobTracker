@@ -103,6 +103,26 @@ by construction and a test only states the one it deliberately breaks. The aggre
 through its public API only -- `JobPhoto`'s constructor is `internal`, so photo cases go through
 `Job.AddPhoto`.
 
+Integration tests live in `tests/JobTracker.Tests/Integration/` and need **Docker running**:
+`PostgresFixture` starts one `postgres:17-alpine` Testcontainer for the whole assembly and
+applies the migrations once. They exercise the real composition root -- `AddApplication()` +
+`AddPersistence()`, the same two calls `Program.cs` makes -- with only the clock substituted
+(`MutableTimeProvider`, which works because handlers take `TimeProvider` by injection).
+
+Tests share one database and isolate by tenant: each test instance gets a fresh
+`OrganizationId`, and since every repository query is tenant-scoped, no truncation between tests
+is needed. Outbox rows are the exception -- the table has no organization column, so outbox
+assertions match on the job id inside the jsonb payload. A real database is not optional here:
+the stored `tsvector` column, the GIN index and the row-value keyset comparison have no
+in-memory equivalent.
+
+The suite covers four seams: `JobPersistenceTests` (EF mapping fidelity, asserted against real
+columns), `JobSearchTests` (full-text, filters, keyset paging), `OutboxTests` (the SaveChanges
+interceptor, including that the row and the job update share one transaction), and
+`JobPipelineTests` (`Mediator.Send` end to end, including tenant isolation and the exact
+`ErrorType` each handler returns). The HTTP layer is deliberately **not** covered -- that needs
+`WebApplicationFactory`, which needs `Program` made public.
+
 ## Known rough edges
 
 Do not "fix" these silently — flag them, since they are load-bearing context:

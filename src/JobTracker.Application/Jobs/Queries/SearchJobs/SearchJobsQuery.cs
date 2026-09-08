@@ -1,4 +1,5 @@
-﻿using JobTracker.Application.Common.Results;
+using JobTracker.Application.Common.Behaviours;
+using JobTracker.Application.Common.Results;
 using JobTracker.Application.Jobs.Queries.Common;
 using JobTracker.Domain.Enums;
 using MediatR;
@@ -14,4 +15,4 @@ public sealed record SearchJobsQuery(
     Guid? AssigneeId = null,
     string? Cursor = null,
     int PageSize = 25)
-    : IRequest<Result<PagedList<JobResponse>>>;
+    : IRequest<Result<PagedList<JobResponse>>>, IRetryableRequest;

@@ -185,14 +185,51 @@ Do not "fix" these silently — flag them, since they are load-bearing context:
 - `JobTracker.Application` declares `Microsoft.Extensions.Logging.Abstractions` explicitly.
   It used to arrive only as a transitive dependency of MediatR, so `ILogger<T>` in the
   pipeline behaviours would stop compiling if MediatR ever dropped it.
-- `RetryBehaviour` exists but is not registered; only `UnhandledExceptionBehaviour` is in the
-  MediatR pipeline. FluentValidation validators are registered but **no validation behaviour runs
-  them**, so validators are currently dead code.
+- FluentValidation validators are registered but **no validation behaviour runs them**, so
+  validators are currently dead code.
 - Two identical `PagedList<T>` records exist (`Common/Results` and `Jobs/Queries`); handlers use the
   `Common/Results` one.
 - `IDbContext` in `Application/Common/Context` is unimplemented and unused.
 - `appsettings.json` contains the dev connection string with a plaintext password (matching
   `docker-compose.yaml`); the `UserSecretsId` is set on the Api project for real secrets.
+
+## Retry
+
+`RetryBehaviour` is a MediatR pipeline behaviour backed by a Polly v8 resilience pipeline,
+registered in `AddApplication` as `AddResiliencePipeline(ResiliencePipelines.RequestRetry)` and
+resolved through `ResiliencePipelineProvider<string>`.
+
+**3 retries at 1s, 2s and 4s** (exponential, base 1s, `MaxDelay` 4s), so a failing request makes 4
+attempts over ~7 seconds before giving up. Jitter is **off** so the delays are exactly those
+values; turn `UseJitter` back on if many callers ever retry in lockstep.
+
+**Every exception is retried except cancellation.** `ResiliencePipelines.ShouldRetry` walks the
+`InnerException` chain and refuses only when it finds an `OperationCanceledException` — cancelling
+is control flow, not a failure to ride out. Everything else, including bugs like a
+`NullReferenceException`, costs 4 attempts and ~7 seconds before surfacing.
+
+**Retry is opt-in, and commands deliberately do not opt in.** A request is retried only if it
+implements `IRetryableRequest`; `GetJobByIdQuery` and `SearchJobsQuery` do, the three commands do
+not. That is not caution for its own sake — retrying a command in this pipeline is *wrong*, and
+would silently corrupt behaviour:
+
+- The DbContext is scoped and its change tracker survives a failed `SaveChangesAsync`. A retried
+  `CompleteJobCommandHandler` re-runs `GetByIdAsync`, which returns the **already-mutated tracked
+  instance**. Its status is now `Completed`, so the handler's own `job.Status != InProgress` guard
+  fails and the retry returns a 409 for a job it just completed.
+- A save that committed but lost the connection before acknowledging would be re-applied.
+
+Making a command retryable means making its handler idempotent first — a fresh scope per attempt,
+or a guard keyed on the operation. Adding the marker to a command without that is a bug, not a
+configuration change.
+
+The pipeline's `TimeProvider` comes from DI (`GetService<TimeProvider>() ?? TimeProvider.System`),
+which is what keeps `RetryBehaviourTests` fast: it registers a provider whose timers fire
+immediately, so the tests assert the real 1s/2s/4s schedule without waiting for it.
+
+Pipeline order is `UnhandledExceptionBehaviour` then `RetryBehaviour`, so exhausted retries are
+logged once as an error by the outer behaviour rather than once per attempt. `RetryBehaviourTests`
+pins that order.
 
 ## Correlation ids
 

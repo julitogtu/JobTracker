@@ -1,11 +1,13 @@
-﻿using JobTracker.Application.Common.Results;
+using JobTracker.Application.Common.Behaviours;
+using JobTracker.Application.Common.Results;
 using JobTracker.Application.Jobs.Queries.Common;
 using JobTracker.Domain.Jobs;
 using MediatR;
 
 namespace JobTracker.Application.Jobs.Queries.GetJobById;
 
-public sealed record GetJobByIdQuery(Guid OrganizationId, Guid JobId) : IRequest<Result<JobResponse>>;
+public sealed record GetJobByIdQuery(Guid OrganizationId, Guid JobId)
+    : IRequest<Result<JobResponse>>, IRetryableRequest;
 
 internal sealed class GetJobByIdQueryHandler(IJobRepository jobRepository) : IRequestHandler<GetJobByIdQuery, Result<JobResponse>>
 {

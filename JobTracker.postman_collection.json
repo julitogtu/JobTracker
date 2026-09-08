@@ -1,0 +1,165 @@
+{
+  "info": {
+    "_postman_id": "6edd6011-f997-4bff-8b54-61b8b8512406",
+    "name": "JobTracker",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "1471951"
+  },
+  "item": [
+    {
+      "name": "Create Job",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"title\": \"Roof inspection\",\r\n    \"description\": \"Inspect roof damage after the storm\",\r\n    \"street\": \"123 Main Street\",\r\n    \"city\": \"Miami\",\r\n    \"state\": \"Florida\",\r\n    \"zipCode\": \"33101\",\r\n    \"latitude\": 25.7617,\r\n    \"longitude\": -80.1918,\r\n    \"customerId\": \"0194c478-feb1-7000-8000-000000000002\",\r\n    \"organizationId\": \"0194c478-feb1-7000-8000-000000000001\",\r\n    \"scheduledDateUtc\": \"2026-10-15T14:00:00Z\",\r\n    \"assigneeId\": \"0194c478-feb1-7000-8000-000000000003\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://localhost:7163/api/Jobs",
+          "protocol": "https",
+          "host": [
+            "localhost"
+          ],
+          "port": "7163",
+          "path": [
+            "api",
+            "Jobs"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Complete Job",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"organizationId\": \"0194c478-feb1-7000-8000-000000000001\",\r\n  \"jobId\": \"01a07d8e-e3f6-7a89-80a9-3b87b5073179\",\r\n  \"signatureUrl\": \"https://storage.example.com/signatures/signature.png\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://localhost:7163/api/Jobs/complete",
+          "protocol": "https",
+          "host": [
+            "localhost"
+          ],
+          "port": "7163",
+          "path": [
+            "api",
+            "Jobs",
+            "complete"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Start Job",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"organizationId\": \"0194c478-feb1-7000-8000-000000000001\",\r\n  \"jobId\": \"01a07d8e-e3f6-7a89-80a9-3b87b5073179\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://localhost:7163/api/Jobs/start",
+          "protocol": "https",
+          "host": [
+            "localhost"
+          ],
+          "port": "7163",
+          "path": [
+            "api",
+            "Jobs",
+            "start"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Search Jobs Page 0",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://localhost:7163/api/jobs/?organizationId=0194c478-feb1-7000-8000-000000000001&pageSize=1",
+          "protocol": "https",
+          "host": [
+            "localhost"
+          ],
+          "port": "7163",
+          "path": [
+            "api",
+            "jobs",
+            ""
+          ],
+          "query": [
+            {
+              "key": "organizationId",
+              "value": "0194c478-feb1-7000-8000-000000000001"
+            },
+            {
+              "key": "pageSize",
+              "value": "1"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Search Jobs with Cursor",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://localhost:7163/api/jobs/?organizationId=0194c478-feb1-7000-8000-000000000001&pageSize=1&cursor=eyJTb3J0RGF0ZVV0YyI6IjIwMjYtMTAtMTVUMTQ6MDA6MDArMDA6MDAiLCJKb2JJZCI6IjAxYTA3ZDdlLWUzNTQtNzExYi04MWNiLTY2M2U5Zjg3NTA5MSJ9",
+          "protocol": "https",
+          "host": [
+            "localhost"
+          ],
+          "port": "7163",
+          "path": [
+            "api",
+            "jobs",
+            ""
+          ],
+          "query": [
+            {
+              "key": "organizationId",
+              "value": "0194c478-feb1-7000-8000-000000000001"
+            },
+            {
+              "key": "pageSize",
+              "value": "1"
+            },
+            {
+              "key": "cursor",
+              "value": "eyJTb3J0RGF0ZVV0YyI6IjIwMjYtMTAtMTVUMTQ6MDA6MDArMDA6MDAiLCJKb2JJZCI6IjAxYTA3ZDdlLWUzNTQtNzExYi04MWNiLTY2M2U5Zjg3NTA5MSJ9"
+            }
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

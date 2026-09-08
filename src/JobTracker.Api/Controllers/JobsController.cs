@@ -2,6 +2,8 @@ using Asp.Versioning;
 using JobTracker.Application.Jobs.Commands.CompleteJob;
 using JobTracker.Application.Jobs.Commands.CreateJob;
 using JobTracker.Application.Jobs.Commands.StartJob;
+using JobTracker.Application.Jobs.Queries.GetJobById;
+using JobTracker.Application.Jobs.Queries.SearchJobs;
 using Microsoft.AspNetCore.Mvc;
 
 namespace JobTracker.Api.Controllers;
@@ -9,10 +11,25 @@ namespace JobTracker.Api.Controllers;
 [ApiVersion("1.0")]
 public class JobsController : ApiControllerBase
 {
-    [HttpGet]
-    public async Task<IActionResult> GetJobs()
+    [HttpGet("{organizationId:guid}/{jobId:guid}")]
+    public async Task<IActionResult> GetJobById([FromRoute] Guid organizationId, [FromRoute] Guid jobId)
     {
-        return Ok();
+        var result = await Mediator.Send(new GetJobByIdQuery(organizationId, jobId));
+
+        return result.IsFailure ? ToProblem(result.Error) : (IActionResult)Ok(result.Value);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> SearchJobs([FromQuery] SearchJobsQuery query)
+    {
+        var result = await Mediator.Send(query);
+
+        if (result.IsFailure)
+        {
+            return ToProblem(result.Error);
+        }
+
+        return Ok(result.Value);
     }
 
     [HttpPost]
@@ -21,9 +38,7 @@ public class JobsController : ApiControllerBase
         var result = await Mediator.Send(command);
 
         if (result.IsFailure)
-        {
             return ToProblem(result.Error);
-        }
 
         return StatusCode(StatusCodes.Status201Created,
             new

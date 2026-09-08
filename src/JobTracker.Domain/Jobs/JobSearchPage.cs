@@ -1,3 +1,3 @@
 ﻿namespace JobTracker.Domain.Jobs;
 
-public sealed record JobSearchPage(IReadOnlyList<Job> Items, string? NextCursor);
+public sealed record JobSearchPage(IReadOnlyList<JobSearchItem> Items, string? NextCursor);

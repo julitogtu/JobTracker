@@ -1,12 +1,42 @@
-﻿using JobTracker.Domain.Enums;
+﻿using JobTracker.Application.Common.Results;
+using JobTracker.Application.Jobs.Queries.Common;
+using JobTracker.Domain.Jobs;
 using MediatR;
 
 namespace JobTracker.Application.Jobs.Queries.SearchJobs;
 
-public class SearchJobsQueryHandler : IRequestHandler<SearchJobsQuery, PagedList<JobDto>>
+internal sealed class SearchJobsQueryHandler(IJobRepository jobRepository) : IRequestHandler<SearchJobsQuery, Result<PagedList<JobResponse>>>
 {
-    public async Task<PagedList<JobDto>> Handle(SearchJobsQuery request, CancellationToken cancellationToken)
+    public async Task<Result<PagedList<JobResponse>>> Handle(SearchJobsQuery query, CancellationToken cancellationToken)
     {
-        return await Task.FromResult(new PagedList<JobDto>(new List<JobDto>(), null, request.PageSize));
+        try
+        {
+            var criteria = new JobSearchCriteria(
+                OrganizationId: query.OrganizationId,
+                SearchTerm: query.SearchTerm,
+                Statuses: query.Statuses,
+                ScheduledFromUtc: query.ScheduledFromUtc,
+                ScheduledToUtc: query.ScheduledToUtc,
+                AssigneeId: query.AssigneeId,
+                Cursor: query.Cursor,
+                PageSize: query.PageSize);
+
+            var page = await jobRepository.SearchAsync(criteria, cancellationToken);
+
+            var responses = page.Items
+                .Select(item => JobResponse.FromSearchItem(item))
+                .ToList();
+
+            var result = new PagedList<JobResponse>(
+                Items: responses,
+                NextCursor: page.NextCursor,
+                PageSize: query.PageSize);
+
+            return Result<PagedList<JobResponse>>.Success(result);
+        }
+        catch (Exception exception)
+        {
+            return Result<PagedList<JobResponse>>.Failure(Error.Validation("Jobs.Search.InvalidCursor", exception.Message));
+        }
     }
-}   
+}

@@ -1,8 +1,8 @@
 ﻿using JobTracker.Domain.Enums;
 
-namespace JobTracker.Application.Jobs.Queries.SearchJobs;
+namespace JobTracker.Domain.Jobs;
 
-public sealed record JobDto(
+public sealed record JobSearchItem(
     Guid Id,
     string Title,
     string Description,

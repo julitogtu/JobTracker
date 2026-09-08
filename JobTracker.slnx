@@ -2,6 +2,7 @@
   <Folder Name="/Solution Items/">
     <File Path="Directory.Packages.props" />
     <File Path="docker-compose.yaml" />
+    <File Path="JobTracker.postman_collection.json" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/JobTracker.Api/JobTracker.Api.csproj" />

@@ -15,9 +15,10 @@ docker compose up -d
 dotnet run --project src/JobTracker.Api
 # Scalar API reference (Development only): /scalar
 
-# Tests
-dotnet test
-dotnet test --filter "FullyQualifiedName~JobTests"   # single class/test
+# Tests (xunit v3 on Microsoft.Testing.Platform -- opted in via global.json)
+dotnet test --solution JobTracker.slnx
+dotnet test --project tests/JobTracker.Tests/JobTracker.Tests.csproj
+dotnet test --project tests/JobTracker.Tests/JobTracker.Tests.csproj -- --filter-class "*JobTests"
 
 # EF Core migrations (Persistence holds the model, Api holds the connection string)
 dotnet ef migrations add <Name> --project src/JobTracker.Persistence --startup-project src/JobTracker.Api
@@ -92,13 +93,28 @@ Search paging is **keyset (cursor) based**, not offset: the cursor is a base64ur
 `(ScheduledDateUtc, JobId)` tuple, ordering by `ScheduledDateUtc ?? 9999-12-31` then `Id`, fetching
 `pageSize + 1` rows to detect a next page. Page size is clamped to 1–100 in the repository.
 
+### Tests
+
+`JobTracker.Tests` references all four src projects. Domain unit tests live in
+`tests/JobTracker.Tests/Domain/`, one file per type under test (`JobTests`, `JobPhotoTests`,
+`AddressTests`, `EntityTests`, `ValueObjectTests`). `JobFactory` builds a `Job` in each status
+from timestamps derived from a single `CreatedAt` constant, so the aggregate's ordering rules hold
+by construction and a test only states the one it deliberately breaks. The aggregate is exercised
+through its public API only -- `JobPhoto`'s constructor is `internal`, so photo cases go through
+`Job.AddPhoto`.
+
 ## Known rough edges
 
 Do not "fix" these silently — flag them, since they are load-bearing context:
 
-- `dotnet test` discovers no tests: `JobTracker.Tests` references only `xunit.v3.extensibility.core`
-  (no test SDK/runner) and has **no ProjectReference to the src projects**. `JobTests` is a dummy
-  assertion. Adding a real test requires fixing the test project first.
+- `dotnet test` needs an explicit target. The .NET 10 SDK dropped VSTest, so the repo opts into
+  Microsoft.Testing.Platform in `global.json`; the bare `dotnet test` form then reports
+  "Zero tests ran" instead of failing loudly. Pass `--project` or `--solution`, and put filters
+  after `--` as MTP options (`-- --filter-class "*JobTests"`) -- the old
+  `--filter "FullyQualifiedName~..."` syntax is gone.
+- FluentAssertions 8.10 prints an Xceed license warning on every test run: it is free for
+  non-commercial use only, and commercial use needs a paid subscription. Worth deciding on
+  deliberately before the suite grows.
 - `Program.cs` configures a rate limiter but never calls `app.UseRateLimiter()`, so it is inert.
   The `PermitLimit` is 2/minute — enabling it will break normal usage until tuned.
 - `Serilog.AspNetCore` is referenced and documented in the README but not wired into the host.

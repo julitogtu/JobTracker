@@ -6,6 +6,15 @@
     <Nullable>enable</Nullable>
     <RootNamespace>JobTracker.Tests</RootNamespace>
     <TargetFramework>net10.0</TargetFramework>
+    <!--
+      xunit v3 test projects are self-executing, so OutputType must be Exe.
+      They run on Microsoft.Testing.Platform, not VSTest: the .NET 10 SDK dropped VSTest
+      support, so `dotnet test` needs the opt-in below plus dotnet.config at the repo root.
+    -->
+    <OutputType>Exe</OutputType>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,7 +23,14 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="xunit.v3.extensibility.core" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\JobTracker.Api\JobTracker.Api.csproj" />
+    <ProjectReference Include="..\..\src\JobTracker.Application\JobTracker.Application.csproj" />
+    <ProjectReference Include="..\..\src\JobTracker.Domain\JobTracker.Domain.csproj" />
+    <ProjectReference Include="..\..\src\JobTracker.Persistence\JobTracker.Persistence.csproj" />
   </ItemGroup>
 
 </Project>

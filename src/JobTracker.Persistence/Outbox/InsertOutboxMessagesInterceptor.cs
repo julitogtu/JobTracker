@@ -1,4 +1,5 @@
-﻿using JobTracker.Domain.Common;
+using JobTracker.Application.Common.Correlation;
+using JobTracker.Domain.Common;
 using JobTracker.Domain.Jobs.Events;
 using JobTracker.Domain.Jobs.IntegrationEvents;
 using Microsoft.EntityFrameworkCore;
@@ -7,7 +8,8 @@ using System.Text.Json;
 
 namespace JobTracker.Persistence.Outbox;
 
-public sealed class InsertOutboxMessagesInterceptor : SaveChangesInterceptor
+public sealed class InsertOutboxMessagesInterceptor(ICorrelationIdAccessor correlationIdAccessor)
+    : SaveChangesInterceptor
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -23,7 +25,7 @@ public sealed class InsertOutboxMessagesInterceptor : SaveChangesInterceptor
         return base.SavingChangesAsync(eventData, result, cancellationToken);
     }
 
-    private static void InsertOutboxMessages(
+    private void InsertOutboxMessages(
         DbContext? dbContext)
     {
         if (dbContext is null)
@@ -61,7 +63,8 @@ public sealed class InsertOutboxMessagesInterceptor : SaveChangesInterceptor
                     id: integrationEvent.EventId,
                     type: typeof(JobCompletedIntegrationEvent).FullName!,
                     content: JsonSerializer.Serialize(integrationEvent,SerializerOptions),
-                    occurredOnUtc: integrationEvent.OccurredOnUtc);
+                    occurredOnUtc: integrationEvent.OccurredOnUtc,
+                    correlationId: correlationIdAccessor.CorrelationId);
 
                 dbContext.Set<OutboxMessage>().Add(outboxMessage);
 

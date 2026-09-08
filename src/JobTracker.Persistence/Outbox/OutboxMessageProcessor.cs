@@ -1,4 +1,4 @@
-﻿using JobTracker.Application.Common.Messaging;
+using JobTracker.Application.Common.Messaging;
 using JobTracker.Persistence.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -32,7 +32,8 @@ public sealed class OutboxMessageProcessor(
                         message.Id,
                         message.Type,
                         message.Content,
-                        message.OccurredOnUtc),
+                        message.OccurredOnUtc,
+                        message.CorrelationId),
                     cancellationToken);
 
                 message.MarkProcessed(timeProvider.GetUtcNow());

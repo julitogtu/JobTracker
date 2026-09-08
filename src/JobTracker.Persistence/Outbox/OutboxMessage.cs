@@ -1,16 +1,17 @@
-﻿namespace JobTracker.Persistence.Outbox;
+namespace JobTracker.Persistence.Outbox;
 
 internal sealed class OutboxMessage
 {
     private OutboxMessage() { }
 
-    private OutboxMessage(Guid id, string type, string content, DateTimeOffset occurredOnUtc)
+    private OutboxMessage(Guid id, string type, string content, DateTimeOffset occurredOnUtc, string correlationId)
     {
         Id = id;
         Type = type;
         Content = content;
         OccurredOnUtc = occurredOnUtc.ToUniversalTime();
         NextAttemptOnUtc = OccurredOnUtc;
+        CorrelationId = correlationId;
     }
 
     public Guid Id { get; private init; }
@@ -20,6 +21,8 @@ internal sealed class OutboxMessage
     public string Content { get; private init; } = string.Empty;
 
     public DateTimeOffset OccurredOnUtc { get; private init; }
+
+    public string CorrelationId { get; private init; } = string.Empty;
 
     public DateTimeOffset? ProcessedOnUtc { get; private set; }
 
@@ -33,8 +36,13 @@ internal sealed class OutboxMessage
 
     public DateTimeOffset? LockedUntilUtc { get; private set; }
 
-    public static OutboxMessage Create(Guid id, string type, string content, DateTimeOffset occurredOnUtc) =>
-        new(id, type, content, occurredOnUtc);
+    public static OutboxMessage Create(
+        Guid id,
+        string type,
+        string content,
+        DateTimeOffset occurredOnUtc,
+        string correlationId) =>
+        new(id, type, content, occurredOnUtc, correlationId);
 
     public void Claim(Guid lockId, DateTimeOffset lockedUntilUtc)
     {

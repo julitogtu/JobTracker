@@ -1,4 +1,5 @@
-﻿using JobTracker.Persistence.Outbox;
+using JobTracker.Application.Common.Correlation;
+using JobTracker.Persistence.Outbox;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
@@ -14,7 +15,7 @@ public sealed class JobsDbContextFactory : IDesignTimeDbContextFactory<JobsDbCon
         var options = new DbContextOptionsBuilder<JobsDbContext>()
             .UseNpgsql(connectionString, npgsql =>
                 npgsql.MigrationsAssembly(typeof(JobsDbContext).Assembly.GetName().Name!))
-            .AddInterceptors(new InsertOutboxMessagesInterceptor())
+            .AddInterceptors(new InsertOutboxMessagesInterceptor(new NullCorrelationIdAccessor()))
             .Options;
 
         return new JobsDbContext(options);

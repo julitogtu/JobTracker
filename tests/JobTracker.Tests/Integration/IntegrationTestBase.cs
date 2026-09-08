@@ -1,4 +1,5 @@
 using System.Data.Common;
+using JobTracker.Application.Common.Correlation;
 using JobTracker.Application.Common.Persistence;
 using JobTracker.Domain.Jobs;
 using JobTracker.Persistence.Database;
@@ -38,12 +39,16 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     protected IntegrationTestBase(PostgresFixture fixture)
     {
         Clock = new MutableTimeProvider(Now);
+        ConnectionString = fixture.ConnectionString;
 
         var services = new ServiceCollection();
 
         // The web host registers logging for free; a bare ServiceCollection does not, and
         // AddMediatR fails at resolve time without an ILoggerFactory.
         services.AddLogging();
+
+        services.AddSingleton<ICorrelationIdAccessor>(Correlation);
+
         services.AddApplication();
         services.AddPersistence(fixture.ConnectionString);
 
@@ -58,6 +63,11 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     protected Guid OrganizationId { get; } = Guid.CreateVersion7();
 
     protected MutableTimeProvider Clock { get; }
+
+    protected string ConnectionString { get; }
+
+    protected MutableCorrelationIdAccessor Correlation { get; } =
+        new($"test-{Guid.CreateVersion7()}");
 
     protected static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -175,7 +185,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         var rows = new List<OutboxRow>();
 
         await using var command = await CreateCommandAsync("""
-            SELECT id, type, content::text, occurred_on_utc, processed_on_utc, retry_count, next_attempt_on_utc
+            SELECT id, type, content::text, occurred_on_utc, processed_on_utc, retry_count, next_attempt_on_utc, correlation_id
             FROM jobs.outbox_messages
             WHERE content ->> 'jobId' = @jobId
             ORDER BY occurred_on_utc
@@ -194,7 +204,8 @@ public abstract class IntegrationTestBase : IAsyncLifetime
                 reader.GetFieldValue<DateTimeOffset>(3),
                 await reader.IsDBNullAsync(4, Ct) ? null : reader.GetFieldValue<DateTimeOffset>(4),
                 reader.GetInt32(5),
-                reader.GetFieldValue<DateTimeOffset>(6)));
+                reader.GetFieldValue<DateTimeOffset>(6),
+                reader.GetString(7)));
         }
 
         return rows;
@@ -262,7 +273,13 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         DateTimeOffset OccurredOnUtc,
         DateTimeOffset? ProcessedOnUtc,
         int RetryCount,
-        DateTimeOffset NextAttemptOnUtc);
+        DateTimeOffset NextAttemptOnUtc,
+        string CorrelationId);
+}
+
+public sealed class MutableCorrelationIdAccessor(string correlationId) : ICorrelationIdAccessor
+{
+    public string CorrelationId { get; set; } = correlationId;
 }
 
 /// <summary>

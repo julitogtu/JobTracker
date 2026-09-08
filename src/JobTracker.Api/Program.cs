@@ -1,18 +1,30 @@
 using Asp.Versioning;
 using JobTracker.Api.Filters;
+using JobTracker.Api.Middleware;
+using JobTracker.Application.Common.Correlation;
 using Scalar.AspNetCore;
+using Serilog;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.ClearProviders();
+builder.Services.AddSerilog((services, configuration) => configuration
+    .ReadFrom.Configuration(builder.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext()
+    .Enrich.WithProperty("Application", "JobTracker.Api"));
 
 var connectionString =
     builder.Configuration.GetConnectionString("JobsDatabase")
     ?? throw new InvalidOperationException(
         "Connection string JobsDatabase was not configured.");
 
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICorrelationIdAccessor, HttpCorrelationIdAccessor>();
+
 builder.Services.AddApplication();
 builder.Services.AddPersistence(connectionString);
-builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddApiVersioning(options =>
 {
@@ -28,15 +40,18 @@ builder.Services.AddControllersWithViews(options =>
             options.Filters.Add<ApiExceptionFilterAttribute>());
 
 
-//builder.Services.AddCors(options => {
-//    options.AddPolicy("AdminSite", policyBuilder => {
-//        //policyBuilder.WithOrigins(builder.Configuration.GetSection("Cors").Get<string[]>() ?? []);
-//        policyBuilder.AllowAnyOrigin();
-//        policyBuilder.AllowAnyHeader();
-//        policyBuilder.AllowAnyMethod();
-//        policyBuilder.AllowCredentials();
-//    });
-//});
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AdminSite", policyBuilder =>
+    {
+        // TODO: AllowAnyOrigin for local testing support. In production, this should be restricted to the admin site domain.
+        //policyBuilder.WithOrigins(builder.Configuration.GetSection("Cors").Get<string[]>() ?? []);
+        policyBuilder.AllowAnyOrigin();
+        policyBuilder.AllowAnyHeader();
+        policyBuilder.AllowAnyMethod();
+        policyBuilder.AllowCredentials();
+    });
+});
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -53,6 +68,9 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+
+app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseSerilogRequestLogging();
 
 if (app.Environment.IsDevelopment())
 {

@@ -1,4 +1,5 @@
-﻿using JobTracker.Application.Common.Exceptions;
+using JobTracker.Api.Middleware;
+using JobTracker.Application.Common.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -10,7 +11,6 @@ public class ApiExceptionFilterAttribute : ExceptionFilterAttribute
 
     public ApiExceptionFilterAttribute()
     {
-        // Register known exception types and handlers.
         exceptionHandlers = new Dictionary<Type, Action<ExceptionContext>>
         {
             { typeof(ValidationException), HandleValidationException },
@@ -23,8 +23,17 @@ public class ApiExceptionFilterAttribute : ExceptionFilterAttribute
     public override void OnException(ExceptionContext context)
     {
         HandleException(context);
+        StampCorrelationId(context);
 
         base.OnException(context);
+    }
+
+    private static void StampCorrelationId(ExceptionContext context)
+    {
+        if (context.Result is ObjectResult { Value: ProblemDetails details })
+        {
+            details.Extensions["correlationId"] = context.HttpContext.GetCorrelationId();
+        }
     }
 
     private void HandleException(ExceptionContext context)

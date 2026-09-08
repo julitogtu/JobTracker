@@ -1,4 +1,4 @@
-﻿using JobTracker.Persistence.Outbox;
+using JobTracker.Persistence.Outbox;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -15,6 +15,7 @@ internal sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outb
         builder.Property(message => message.Type).HasColumnName("type").HasMaxLength(500).IsRequired();
         builder.Property(message => message.Content).HasColumnName("content").HasColumnType("jsonb").IsRequired();
         builder.Property(message => message.OccurredOnUtc).HasColumnName("occurred_on_utc").IsRequired();
+        builder.Property(message => message.CorrelationId).HasColumnName("correlation_id").HasMaxLength(128).IsRequired();
         builder.Property(message => message.ProcessedOnUtc).HasColumnName("processed_on_utc");
         builder.Property(message => message.RetryCount).HasColumnName("retry_count").IsRequired();
         builder.Property(message => message.NextAttemptOnUtc).HasColumnName("next_attempt_on_utc").IsRequired();
@@ -30,5 +31,8 @@ internal sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outb
             message.OccurredOnUtc
         })
             .HasDatabaseName("ix_outbox_pending");
+
+        builder.HasIndex(message => message.CorrelationId)
+            .HasDatabaseName("ix_outbox_correlation_id");
     }
 }

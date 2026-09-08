@@ -1,10 +1,12 @@
-﻿using JobTracker.Application.Common.Messaging;
+using JobTracker.Application.Common.Correlation;
+using JobTracker.Application.Common.Messaging;
 using JobTracker.Application.Common.Persistence;
 using JobTracker.Domain.Jobs;
 using JobTracker.Persistence.Database;
 using JobTracker.Persistence.Outbox;
 using JobTracker.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
@@ -15,6 +17,7 @@ public static class DependencyInjection
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
         services.AddSingleton(TimeProvider.System);
+        services.TryAddScoped<ICorrelationIdAccessor, NullCorrelationIdAccessor>();
         services.AddScoped<InsertOutboxMessagesInterceptor>();
 
         services.AddDbContext<JobsDbContext>((serviceProvider, options) =>

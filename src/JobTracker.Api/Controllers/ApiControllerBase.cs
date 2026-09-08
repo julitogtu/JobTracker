@@ -1,3 +1,4 @@
+using JobTracker.Api.Middleware;
 using JobTracker.Application.Common.Results;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -24,9 +25,16 @@ public abstract class ApiControllerBase : ControllerBase
             _ => StatusCodes.Status500InternalServerError
         };
 
-        return Problem(
+        var problem = Problem(
             statusCode: statusCode,
             title: error.Code,
             detail: error.Description);
+
+        if (problem.Value is ProblemDetails details)
+        {
+            details.Extensions["correlationId"] = HttpContext.GetCorrelationId();
+        }
+
+        return problem;
     }
 }

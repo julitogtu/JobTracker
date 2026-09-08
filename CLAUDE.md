@@ -123,6 +123,46 @@ interceptor, including that the row and the job update share one transaction), a
 `ErrorType` each handler returns). The HTTP layer is deliberately **not** covered -- that needs
 `WebApplicationFactory`, which needs `Program` made public.
 
+### End-to-end tests
+
+```powershell
+docker compose up -d                      # required: the suite resets its tenant via psql
+cd src/JobTracker.App
+npm run test:e2e                          # browser -> Next -> .NET API -> PostgreSQL
+npm run test:e2e -- --grep completing   # one describe block
+npm run test:e2e:ui                       # Playwright UI mode
+```
+
+Playwright specs live in `src/JobTracker.App/e2e/`. **Run them through `npm run test:e2e`, not
+`npx playwright test`** -- `scripts/run-e2e.mjs` mints a fresh `JOBTRACKER_ORGANIZATION_ID` and
+passes it to the Next server it starts, which is what gives the run a private slice of the shared
+database. The config starts both servers itself (the API on 5238 via the `http` profile, Next on
+**3100** so an existing `npm run dev` on 3000 is untouched).
+
+Two constraints worth knowing before changing the setup:
+
+- Tests run **serially with one worker**, and an auto-fixture empties the tenant before each test
+  with `docker exec jobtracker-postgres psql`. The organization id is per *run*, not per test --
+  it is server environment and the Next server starts once -- so without that reset any assertion
+  about a total is really an assertion about test order. It goes to SQL because the API has no
+  delete endpoint.
+- Specs seed state through the **API**, not the UI, and assert through the browser. That is not
+  just for speed: the React app has no start-job feature, so `InProgress` is unreachable from the
+  UI and the complete-job flow could not be set up any other way.
+
+`playwright.config.ts` pins `channel: 'chrome'` (the installed browser) rather than Playwright's
+bundled Chromium, and disables video: `npx playwright install` times out on this network, and a
+missing ffmpeg binary fails the test rather than degrading. Traces and screenshots are retained on
+failure.
+
+## Playwright MCP
+
+`.mcp.json` registers the Playwright MCP server for interactive browser driving. It is pinned to
+`--browser chrome` for the same reason as above -- the bundled Chromium is not downloadable here.
+Claude Code loads `.mcp.json` at startup, so it needs a restart (and approval of the new server)
+before the tools appear. This is separate from the e2e suite: the MCP is for exploring the running
+app by hand, the suite is what runs in CI.
+
 ## Known rough edges
 
 Do not "fix" these silently — flag them, since they are load-bearing context:
@@ -137,7 +177,14 @@ Do not "fix" these silently — flag them, since they are load-bearing context:
   deliberately before the suite grows.
 - `Program.cs` configures a rate limiter but never calls `app.UseRateLimiter()`, so it is inert.
   The `PermitLimit` is 2/minute — enabling it will break normal usage until tuned.
-- `Serilog.AspNetCore` is referenced and documented in the README but not wired into the host.
+- MediatR 14 is licensed **RPL-1.5 or commercial** (Lucky Penny), not Apache-2.0 like 12.x.
+  Unlicensed, every start logs "You do not have a valid license key for MediatR ... you are
+  required to have a licensed version" -- allowed for development, not for production. Set
+  `MEDIATR_LICENSE_KEY` (or `cfg.LicenseKey` in `AddApplication`) when that matters. The last
+  Apache-2.0 release is 12.5.0 and it uses the same API this codebase calls.
+- `JobTracker.Application` declares `Microsoft.Extensions.Logging.Abstractions` explicitly.
+  It used to arrive only as a transitive dependency of MediatR, so `ILogger<T>` in the
+  pipeline behaviours would stop compiling if MediatR ever dropped it.
 - `RetryBehaviour` exists but is not registered; only `UnhandledExceptionBehaviour` is in the
   MediatR pipeline. FluentValidation validators are registered but **no validation behaviour runs
   them**, so validators are currently dead code.
@@ -146,6 +193,51 @@ Do not "fix" these silently — flag them, since they are load-bearing context:
 - `IDbContext` in `Application/Common/Context` is unimplemented and unused.
 - `appsettings.json` contains the dev connection string with a plaintext password (matching
   `docker-compose.yaml`); the `UserSecretsId` is set on the Api project for real secrets.
+
+## Correlation ids
+
+`CorrelationIdMiddleware` (registered first in the pipeline) gives every request an id, taken from
+the inbound `X-Correlation-Id` header when the caller sent one and minted with
+`Guid.CreateVersion7()` when they did not. It is echoed on the response, pushed to the Serilog
+`LogContext` alongside the W3C `TraceId`, and attached to every ProblemDetails body as
+`correlationId` -- so a caller reporting a failure can quote an id that finds the request.
+
+The inbound header is **validated, not trusted**: at most 128 characters from
+`[A-Za-z0-9-_.:]`, anything else discarded and a fresh id minted. It goes into every log line for
+the request, so an unvalidated value lets a caller forge log entries with newlines and bloat log
+storage at will.
+
+Reach it from:
+
+- **Api** -- `HttpContext.GetCorrelationId()`.
+- **Application / Persistence** -- `ICorrelationIdAccessor` (`Application/Common/Correlation`),
+  implemented by `HttpCorrelationIdAccessor`. It returns `ICorrelationIdAccessor.None` when there
+  is no request in scope, so a hosted service can depend on it safely.
+
+Serilog is now wired into the host (`builder.Logging.ClearProviders()` +
+`AddSerilog(... Enrich.FromLogContext())`, configured from the `Serilog` section of
+`appsettings.json`, plus `UseSerilogRequestLogging()`). **`Enrich.FromLogContext()` is
+load-bearing**: without it `LogContext.PushProperty` silently enriches nothing and the middleware
+looks like it works -- header still returned, logs still written, correlation id nowhere.
+`CorrelationIdMiddlewareTests` asserts on real log events specifically to catch that.
+
+### The outbox carries it too
+
+`OutboxMessage` has a `correlation_id` column (indexed, migration `AddOutboxCorrelationId`).
+`InsertOutboxMessagesInterceptor` takes `ICorrelationIdAccessor` and stamps the id of the request
+that produced the domain event, in the same transaction as the job update. `OutboxEnvelope` then
+carries it to `IOutboxMessagePublisher`, so a downstream consumer receives it. That is the link
+that survives the request ending: a row drained minutes later still names the request that caused
+it.
+
+`AddPersistence` registers `NullCorrelationIdAccessor` with `TryAddScoped`, so Persistence stands
+alone in tests and background hosts. The Api registers `HttpCorrelationIdAccessor` **before**
+`AddPersistence` in `Program.cs`, which is what makes the `TryAdd` a no-op there -- reordering
+those two lines silently reverts every outbox row to `none`.
+
+Still missing for a full chain: **outbound propagation**. When this service starts calling others,
+an outgoing HttpClient needs a `DelegatingHandler` that forwards `X-Correlation-Id`, and the
+publisher (still a no-op stub) needs to put it on the wire as a message header.
 
 ## API surface
 

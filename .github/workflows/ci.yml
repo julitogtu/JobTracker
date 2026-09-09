@@ -50,8 +50,11 @@ jobs:
       - name: Build
         run: dotnet build JobTracker.slnx --configuration Release --no-restore
 
-      # --solution is not optional: global.json opts into Microsoft.Testing.Platform, and a bare
-      # `dotnet test` reports "Zero tests ran" instead of failing.
+      # Release, not Debug: test ordering differs between configurations, and the integration
+      # suite shares one outbox table with no tenant column.
+      #
+      # --solution is not optional either: global.json opts into Microsoft.Testing.Platform, and
+      # a bare `dotnet test` reports "Zero tests ran" instead of failing.
       - name: Test
         run: dotnet test --solution JobTracker.slnx --configuration Release --no-build
 
@@ -109,9 +112,20 @@ jobs:
           key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-
 
-      # Only the database. --wait blocks until the healthcheck passes, and the compose file
-      # names the container jobtracker-postgres, which the suite's reset fixture shells into
-      # by name to empty its tenant between tests.
+      # Must come before `dotnet ef`, which reads project metadata and therefore needs
+      # obj/project.assets.json to exist. On a fresh runner nothing has restored yet, and the
+      # migration step fails with NETSDK1004 rather than with anything about migrations.
+      - name: Restore
+        run: dotnet restore JobTracker.slnx
+
+      # Playwright's webServer gives `dotnet run` 180 seconds. A cold build can exceed that, so
+      # get it out of the way while nothing is waiting on a timeout.
+      - name: Pre-build the API
+        run: dotnet build src/JobTracker.Api --configuration Debug --no-restore
+
+      # Only the database. --wait blocks until the healthcheck passes, and the compose file names
+      # the container jobtracker-postgres, which the suite's reset fixture shells into by name to
+      # empty its tenant between tests.
       - name: Start PostgreSQL
         run: docker compose up -d --wait postgres
 
@@ -123,14 +137,7 @@ jobs:
         run: |
           dotnet tool install --global dotnet-ef --version 10.0.*
           export PATH="$PATH:$HOME/.dotnet/tools"
-          dotnet ef database update \
-            --project src/JobTracker.Persistence \
-            --startup-project src/JobTracker.Persistence
-
-      # Playwright's webServer gives `dotnet run` 180 seconds. A cold restore and build can
-      # exceed that, so get it out of the way while nothing is waiting on a timeout.
-      - name: Pre-build the API
-        run: dotnet build src/JobTracker.Api --configuration Debug
+          dotnet ef database update --project src/JobTracker.Persistence --startup-project src/JobTracker.Persistence
 
       - name: Install dependencies
         working-directory: src/JobTracker.App

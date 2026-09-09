@@ -2,12 +2,15 @@
 
 Next.js 16 (App Router, React 19) client for the JobTracker .NET API.
 
+See the [root README](../../README.md) for the whole system — architecture, flow diagrams, and
+`docker compose up -d --build` to run everything at once (the UI is then on port 3001).
+
 ## Running
 
 The UI reads and writes through the .NET API, so start that first:
 
 ```bash
-docker compose up -d                                   # Postgres
+docker compose up -d postgres                          # just the database
 dotnet run --project src/JobTracker.Api                # http://localhost:5238
 
 cd src/JobTracker.App

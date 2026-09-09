@@ -38,6 +38,40 @@ running `dotnet ef` against a non-default database.
 NuGet versions are managed centrally in `Directory.Packages.props` — `PackageReference` entries in
 `.csproj` files carry no `Version` attribute. Add the version there first.
 
+## CI
+
+`.github/workflows/ci.yml` runs on pushes to `main`, on every pull request, and on demand. Four
+jobs, all in parallel:
+
+| Job | What it runs |
+| --- | --- |
+| `backend` | `dotnet build` + `dotnet test --solution JobTracker.slnx` in **Release** |
+| `web` | `npm ci`, `npm run typecheck`, `npm run build` |
+| `e2e` | the Playwright suite against a real API, Next server and database |
+| `images` | `docker compose build` — every image in the stack |
+
+**Build and test in Release, because Debug is not the same run.** The suite shares one outbox
+table with no tenant column, so a test that assumes a drain only sees its own rows passes or fails
+depending on ordering — and Release orders differently. That exact bug shipped once already.
+
+**`e2e` provides only the database; Playwright starts the rest.** The job runs
+`docker compose up -d --wait postgres` (the container has to be named `jobtracker-postgres` —
+the reset fixture shells into it by name), applies migrations with `dotnet ef`, then pre-builds
+the API: `playwright.config.ts` gives `dotnet run` 180 seconds, and a cold restore on a fresh
+runner can exceed that. The report and traces upload as an artifact.
+
+**`e2e` depends on the runner having Google Chrome.** `playwright.config.ts` pins
+`channel: 'chrome'` rather than the bundled Chromium, and the ubuntu image ships Chrome, so
+nothing is installed. If that ever stops being true, `npx playwright install chrome` is the fix.
+
+**`images` exists because the Dockerfiles carry hand-written restore lists.** Adding a project to
+the solution can leave them copying a tree that no longer compiles, and `dotnet build` will not
+notice — which is exactly how the API Dockerfile broke when
+`JobTracker.Jobs.IntegrationEvents` was added.
+
+NuGet is cached on `Directory.Packages.props` + every `.csproj`, since the repo has no
+`packages.lock.json`. npm is cached on the app's `package-lock.json`.
+
 ## Docker Compose
 
 `docker compose up -d --build` brings up five services.

@@ -24,8 +24,8 @@ public sealed class OutboxDispatchTests(PostgresFixture fixture) : IntegrationTe
 
         claimed.Should().BeGreaterThanOrEqualTo(1);
 
-        var invoice = hangfire.SingleArgumentFor<InvoiceGenerationJob, GenerateInvoiceCommand>();
-        var notification = hangfire.SingleArgumentFor<CustomerNotificationJob, NotifyCustomerOfCompletionCommand>();
+        var invoice = InvoiceFor(job.Id);
+        var notification = NotificationFor(job.Id);
 
         invoice.JobId.Should().Be(job.Id);
         invoice.OrganizationId.Should().Be(OrganizationId);
@@ -66,14 +66,11 @@ public sealed class OutboxDispatchTests(PostgresFixture fixture) : IntegrationTe
     {
         Correlation.CorrelationId = "corr-completing-request";
 
-        await CompleteAJobAsync();
+        var job = await CompleteAJobAsync();
         await Drain();
 
-        hangfire.SingleArgumentFor<InvoiceGenerationJob, GenerateInvoiceCommand>()
-            .CorrelationId.Should().Be("corr-completing-request");
-
-        hangfire.SingleArgumentFor<CustomerNotificationJob, NotifyCustomerOfCompletionCommand>()
-            .CorrelationId.Should().Be("corr-completing-request");
+        InvoiceFor(job.Id).CorrelationId.Should().Be("corr-completing-request");
+        NotificationFor(job.Id).CorrelationId.Should().Be("corr-completing-request");
     }
 
     [Fact]
@@ -102,6 +99,14 @@ public sealed class OutboxDispatchTests(PostgresFixture fixture) : IntegrationTe
 
         return job;
     }
+
+    private GenerateInvoiceCommand InvoiceFor(Guid jobId) =>
+        hangfire.ArgumentsFor<InvoiceGenerationJob, GenerateInvoiceCommand>()
+            .Single(command => command.JobId == jobId);
+
+    private NotifyCustomerOfCompletionCommand NotificationFor(Guid jobId) =>
+        hangfire.ArgumentsFor<CustomerNotificationJob, NotifyCustomerOfCompletionCommand>()
+            .Single(command => command.JobId == jobId);
 
     private Task<int> Drain() =>
         ProcessorWith(new HangfireOutboxDispatcher(hangfire, NullLogger<HangfireOutboxDispatcher>.Instance))

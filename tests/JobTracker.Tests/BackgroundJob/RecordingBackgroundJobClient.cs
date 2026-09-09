@@ -20,12 +20,12 @@ internal sealed class RecordingBackgroundJobClient : IBackgroundJobClient
 
     public bool ChangeState(string jobId, IState state, string expectedState) => true;
 
-    public TArgument SingleArgumentFor<T, TArgument>()
-    {
-        var job = enqueued.Single(entry => entry.Job.Type == typeof(T));
+    public IEnumerable<TArgument> ArgumentsFor<T, TArgument>() =>
+        enqueued
+            .Where(entry => entry.Job.Type == typeof(T))
+            .Select(entry => entry.Job.Args.OfType<TArgument>().Single());
 
-        return job.Job.Args.OfType<TArgument>().Single();
-    }
+    public TArgument SingleArgumentFor<T, TArgument>() => ArgumentsFor<T, TArgument>().Single();
 
     internal sealed record EnqueuedJob(string Id, HangfireJob Job, IState State);
 }

@@ -1,0 +1,174 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch cancels the run in flight. The e2e job holds a PostgreSQL
+# container and two servers, so leaving superseded runs going is not free.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_VERSION: "10.0.x"
+  NODE_VERSION: "24"
+  DOTNET_NOLOGO: "true"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  # Unit tests and the Testcontainers integration suite. The runner has Docker, which is what
+  # PostgresFixture needs to start postgres:17-alpine.
+  backend:
+    name: .NET build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # No packages.lock.json in the repo, so the cache key is the version manifest plus every
+      # csproj -- the two files that decide what gets restored.
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore JobTracker.slnx
+
+      - name: Build
+        run: dotnet build JobTracker.slnx --configuration Release --no-restore
+
+      # --solution is not optional: global.json opts into Microsoft.Testing.Platform, and a bare
+      # `dotnet test` reports "Zero tests ran" instead of failing.
+      - name: Test
+        run: dotnet test --solution JobTracker.slnx --configuration Release --no-build
+
+  web:
+    name: Next.js typecheck and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: src/JobTracker.App
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/JobTracker.App/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+  # Browser -> Next -> .NET API -> PostgreSQL. Playwright starts the API and the Next server
+  # itself; this job only has to provide a migrated database and the toolchains.
+  e2e:
+    name: Playwright end to end
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/JobTracker.App/package-lock.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      # Only the database. --wait blocks until the healthcheck passes, and the compose file
+      # names the container jobtracker-postgres, which the suite's reset fixture shells into
+      # by name to empty its tenant between tests.
+      - name: Start PostgreSQL
+        run: docker compose up -d --wait postgres
+
+      # Neither host migrates on boot. JobsDbContextFactory reads JOBTRACKER_CONNECTION_STRING,
+      # which is why Persistence can be its own startup project here.
+      - name: Apply migrations
+        env:
+          JOBTRACKER_CONNECTION_STRING: Host=localhost;Port=5432;Database=jobtracker;Username=jobtracker;Password=jobtracker_dev_password;SSL Mode=Disable
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.*
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          dotnet ef database update \
+            --project src/JobTracker.Persistence \
+            --startup-project src/JobTracker.Persistence
+
+      # Playwright's webServer gives `dotnet run` 180 seconds. A cold restore and build can
+      # exceed that, so get it out of the way while nothing is waiting on a timeout.
+      - name: Pre-build the API
+        run: dotnet build src/JobTracker.Api --configuration Debug
+
+      - name: Install dependencies
+        working-directory: src/JobTracker.App
+        run: npm ci
+
+      # playwright.config.ts pins channel: 'chrome' rather than Playwright's bundled Chromium,
+      # and the ubuntu runner image ships Google Chrome. Nothing to install -- but if that ever
+      # changes, this is the line that breaks and `npx playwright install chrome` is the fix.
+      - name: Run the e2e suite
+        working-directory: src/JobTracker.App
+        run: npm run test:e2e
+
+      - name: Upload the Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            src/JobTracker.App/playwright-report
+            src/JobTracker.App/test-results
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+  # Builds every image the compose stack defines. The Dockerfiles carry their own hand-written
+  # restore lists, so adding a project to the solution can leave them building a tree that no
+  # longer compiles -- which `dotnet build` alone would not catch.
+  images:
+    name: Docker images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Buildx and Compose v2 are both preinstalled on the runner, so no setup action is needed.
+      - name: Build the compose images
+        run: docker compose build

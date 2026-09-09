@@ -165,6 +165,15 @@ domain reading the clock. Ids are `Guid.CreateVersion7()`, generated in the hand
 Note that both the aggregate and the FluentValidation validators enforce invariants; the validator
 guards the request shape, the aggregate guards the domain rule.
 
+URL invariants (`Job.SignatureUrl`, `JobPhoto.Url`) go through `AbsoluteUrl.IsHttpOrHttps`, which
+requires an absolute URI **and** an http/https scheme. The scheme check is not decoration:
+`Uri.TryCreate(value, UriKind.Absolute, out _)` alone is **platform-dependent** — on Unix a rooted
+path like `/signatures/abc.png` parses as an absolute `file:` URI and passes, while on Windows it
+fails. That made the guard accept in a Linux container what it rejected on a Windows dev box, and
+it accepted `javascript:` and `data:` everywhere. `JobTests` and `JobPhotoTests` pin all three
+cases, so a "simplification" back to the bare `TryCreate` fails on every platform rather than only
+in CI.
+
 ### Outbox
 
 `InsertOutboxMessagesInterceptor` is an EF `SaveChangesInterceptor` registered on the DbContext.

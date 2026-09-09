@@ -90,7 +90,10 @@ public class JobPhotoTests
     [InlineData("   ")]
     [InlineData("/photos/abc.jpg")]
     [InlineData("photos/abc.jpg")]
-    public void AddPhoto_WithoutAnAbsoluteUrl_Throws(string url)
+    [InlineData("file:///etc/passwd")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("data:text/html;base64,PHNjcmlwdD4=")]
+    public void AddPhoto_WithoutAnAbsoluteHttpUrl_Throws(string url)
     {
         var job = JobFactory.InProgress();
 

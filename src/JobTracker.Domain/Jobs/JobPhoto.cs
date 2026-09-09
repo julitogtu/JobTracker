@@ -1,4 +1,4 @@
-﻿using JobTracker.Domain.Common;
+using JobTracker.Domain.Common;
 
 namespace JobTracker.Domain.Jobs;
 
@@ -19,9 +19,9 @@ public sealed class JobPhoto : Entity
             throw new ArgumentException("Photo URL is required.", nameof(url));
         }
 
-        if (!Uri.TryCreate(url, UriKind.Absolute, out _))
+        if (!AbsoluteUrl.IsHttpOrHttps(url.Trim()))
         {
-            throw new ArgumentException("Photo URL must be an absolute URI.", nameof(url));
+            throw new ArgumentException("Photo URL must be an absolute http or https URL.", nameof(url));
         }
 
         JobId = jobId;

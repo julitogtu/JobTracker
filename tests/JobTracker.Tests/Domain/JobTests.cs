@@ -448,8 +448,15 @@ public class JobTests
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("not-a-url")]
+    [InlineData("signatures/abc.png")]
+    // A rooted path is a valid absolute file: URI on Unix and not on Windows, so a plain
+    // Uri.TryCreate(UriKind.Absolute) guard accepts these in a Linux container and rejects them
+    // on a Windows dev box. The scheme check is what makes the rule the same everywhere.
     [InlineData("/signatures/abc.png")]
-    public void Complete_WithoutAnAbsoluteSignatureUrl_Throws(string signatureUrl)
+    [InlineData("file:///etc/passwd")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("data:text/html;base64,PHNjcmlwdD4=")]
+    public void Complete_WithoutAnAbsoluteHttpSignatureUrl_Throws(string signatureUrl)
     {
         var job = JobFactory.InProgress();
 

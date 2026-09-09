@@ -26,6 +26,8 @@ drained out of process, and a correlation id that survives all of it.
 - [Continuous integration](#continuous-integration)
 - [Project structure](#project-structure)
 - [Known rough edges](#known-rough-edges)
+- [Design analysis: denormalize, join, or sync?](#design-analysis-denormalize-join-or-sync)
+- [Events, delivery, and idempotency](#events-delivery-and-idempotency)
 
 ---
 
@@ -689,3 +691,153 @@ These are deliberate and load-bearing — documented rather than silently "fixed
 
 `CLAUDE.md` carries the deeper design notes — retry semantics, persistence conventions, and the
 reasoning behind each of the above.
+
+---
+
+## Design analysis: denormalize, join, or sync?
+
+`Job` stores a bare `CustomerId` — nothing about the customer lives on the row. Rendering a job
+list with customer names leaves three options.
+
+**Join from Contacts at read time.** Correct by construction: there is one copy, so it cannot be
+stale. This is right when the value must be authoritative at the instant it is read — the billing
+address on an invoice, a credit hold — or when it changes often enough that any copy would usually
+be wrong. The cost is coupling and latency: a cross-context join binds the two schemas together
+and blocks the read on both. It would also break the keyset query, which pages over `jobs` alone.
+
+**Denormalize a frozen snapshot.** Copy the name onto the job at creation and never touch it.
+Right when you want the *historical* value — the customer as they were when the work was done,
+which is what a signed job sheet or an audit trail means. Such a copy is not stale; it is
+deliberately point-in-time, and needs no synchronization.
+
+**Denormalize and sync with integration events.** Keep the local copy, and let Contacts publish
+`CustomerRenamed` so Jobs updates it. Right when you want current values without the coupling: the
+read stays local and fast, and freshness becomes a background concern, not a query problem.
+
+**The trade-offs.** The join is strongly consistent and structurally coupled — one schema change
+away from breaking two contexts. The snapshot is perfectly consistent with a *different* question,
+and wrong only if you expected "current". The synced replica is eventually consistent: there is a
+window in which Jobs shows the old name, and you inherit the entire delivery problem — ordering,
+retries, duplicates, and eventually a reconciliation job for the events that go missing anyway.
+
+---
+
+## Events, delivery, and idempotency
+
+### Domain events within a module, integration events across
+
+`JobCompletedDomainEvent` and `JobCompletedIntegrationEvent` carry almost the same fields. They
+are separate types on purpose, and the difference is not ceremony — it is who is allowed to break
+them.
+
+A **domain event** is an internal fact. `JobCompletedDomainEvent` lives in `JobTracker.Domain`,
+is raised by the aggregate inside `Job.Complete`, and is consumed in the same process, in the same
+transaction, by `InsertOutboxMessagesInterceptor`. Nothing outside the solution ever sees it, so it
+can hold domain types, and renaming a field is a compiler problem — you find every caller and fix
+them in one commit. Its job is to let the aggregate say *what happened* without knowing who cares.
+
+An **integration event** is a published contract. `JobCompletedIntegrationEvent` lives in
+`JobTracker.Jobs.IntegrationEvents`, a project with **no project references at all**, because a
+consumer must be able to depend on the shape of the event without dragging in the aggregate, EF or
+MediatR. It is serialized to `jsonb`, read back by a different process minutes later, and one day
+by a service you do not deploy. Renaming a field there is a breaking change you cannot fix in one
+commit — which is exactly why it is a different type, in a different assembly, with a deliberately
+narrow shape.
+
+`InsertOutboxMessagesInterceptor` is the single translation point between the two vocabularies. It
+also calls `RemoveDomainEvent` after mapping, so a second `SaveChanges` on the same tracked
+aggregate cannot write the row twice.
+
+Note what is *not* translated: `JobCreatedDomainEvent` and `JobCancelledDomainEvent` are raised and
+then dropped on save. Only completion is a fact other contexts have asked for, so only completion
+becomes a contract. Raising a domain event costs nothing; publishing an integration event commits
+you to supporting it.
+
+---
+
+### Why the outbox gives at-least-once delivery
+
+The guarantee comes from two halves, and it is worth being precise about which half does what.
+
+**Nothing is ever lost, because the message is written by the same transaction as the fact.**
+`InsertOutboxMessagesInterceptor` runs inside `SaveChanges`, so the `jobs.jobs` update and the
+`jobs.outbox_messages` insert are one commit. There is no window in which a job is Completed but
+no message exists, and none in which a message exists for a job that was never completed. Either
+both landed or neither did. `OutboxTests.OutboxMessage_AndTheJobUpdate_ShareOneTransaction` pins
+this by rolling back and asserting that the row went with it.
+
+Without the outbox you have a dual write — commit to PostgreSQL, then publish to a broker — with
+no transaction spanning both. Crash in between and you have a completed job nobody billed for.
+
+**Nothing is delivered at most once, because publishing and recording that fact cannot share a
+transaction.** `OutboxMessageProcessor` claims a batch (`FOR UPDATE SKIP LOCKED` plus a lock
+lease), publishes, then writes `processed_on_utc` in a *separate* write against a *different*
+system. Die between those two and the row is still pending, so the next drain publishes it again.
+The lock lease adds a second duplicate source: a worker that dies holding a claim has that claim
+expire, and another worker picks the row up.
+
+That is a deliberate choice, not a gap. The two orderings available are:
+
+| Order | Failure mode | Guarantee |
+|---|---|---|
+| publish, then mark processed | crash after publish → redelivered | **at-least-once** |
+| mark processed, then publish | crash after mark → message lost | at-most-once |
+
+Exactly-once delivery is not on the menu — it would need a distributed transaction across
+PostgreSQL and the broker. What *is* achievable is exactly-once **effect**, and that is bought on
+the consumer side, with idempotency.
+
+---
+
+### Idempotency in the invoice handler
+
+Because delivery is at-least-once, `InvoiceGenerationJob` can run twice for one completed job —
+from a redelivered outbox row, or from Hangfire retrying the job itself. Raising two invoices for
+one job is exactly the kind of duplicate that costs money, so the contract carries the key that
+makes the second run a no-op:
+
+```csharp
+// JobTracker.Jobs.IntegrationEvents/JobCompletedIntegrationEvent.cs
+public string IdempotencyKey => $"{JobId:N}:{CompletedAtUtc:O}";
+```
+
+**Why `JobId + CompletedAtUtc`, and not `EventId`.** `EventId` identifies a *message*;
+`IdempotencyKey` identifies a *business fact*. They coincide for a plain redelivery — the same row
+carries the same `EventId` — but they diverge everywhere else. `EventId` is a fresh
+`Guid.NewGuid()` minted inside `Job.Complete`, so a replayed backfill, a migration that re-emits
+history, or a second producer describing the same completion would each mint a new one and slip
+past a dedupe keyed on it. `JobId + CompletedAtUtc` is derived entirely from the fact itself, so
+any two messages describing the same completion produce the same key, no matter who produced them.
+
+**Why the timestamp is in the key rather than `JobId` alone.** Today `Completed` is terminal and
+`CompletedAtUtc` is written exactly once, so the key is stable for the life of the job — `JobId`
+alone would be sufficient. It is not future-proof, though. If the lifecycle ever gains a
+reopen-and-re-complete transition, the second completion is a genuinely new fact that *deserves* a
+second invoice, and a key of `JobId` alone would silently suppress it. Including the timestamp
+means the key changes exactly when the fact changes.
+
+**How a real handler would enforce it.** The key travels into `GenerateInvoiceCommand`, so
+`InvoiceService` has everything it needs:
+
+```csharp
+// Billing owns the guard, because Billing owns the invoice.
+if (await invoices.ExistsAsync(command.IdempotencyKey, cancellationToken))
+    return;
+
+await invoices.AddAsync(Invoice.For(command), cancellationToken);
+```
+
+The check alone is not enough — two concurrent deliveries can both pass it. The guard has to be a
+**unique constraint** on the key column, with the insert catching the violation and returning
+successfully. The database settles the race; the `Exists` check is only there to avoid the
+exception on the common path.
+
+> ⚠️ **This is designed for, not yet enforced.** `InvoiceService` and `CustomerNotificationJob` are
+> stubs: they receive `IdempotencyKey` and log it, and neither stores anything to dedupe against.
+> A duplicate delivery today produces a duplicate log line, which is harmless only because nothing
+> real happens yet. Adding the store above is the first thing either module needs before it does
+> real work — see [Known rough edges](#known-rough-edges).
+
+The same reasoning applies to the notification: sending one customer two "your job is done" emails
+is less costly than two invoices, but it is still a defect, and the key is already on
+`NotifyCustomerOfCompletionCommand` for it.

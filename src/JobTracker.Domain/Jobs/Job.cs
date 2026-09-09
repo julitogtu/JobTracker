@@ -1,4 +1,4 @@
-﻿using JobTracker.Domain.Common;
+using JobTracker.Domain.Common;
 using JobTracker.Domain.Enums;
 using JobTracker.Domain.Jobs.Events;
 
@@ -255,8 +255,8 @@ public sealed class Job : AggregateRoot
     {
         var normalized = Required(value, parameterName, 2_048);
 
-        return !Uri.TryCreate(normalized, UriKind.Absolute, out _)
-            ? throw new ArgumentException("The value must be an absolute URL.", parameterName)
+        return !AbsoluteUrl.IsHttpOrHttps(normalized)
+            ? throw new ArgumentException("The value must be an absolute http or https URL.", parameterName)
             : normalized;
     }
 }

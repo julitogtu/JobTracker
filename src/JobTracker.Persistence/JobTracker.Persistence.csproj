@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -19,6 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\JobTracker.Application\JobTracker.Application.csproj" />
     <ProjectReference Include="..\JobTracker.Domain\JobTracker.Domain.csproj" />
+    <ProjectReference Include="..\JobTracker.Jobs.IntegrationEvents\JobTracker.Jobs.IntegrationEvents.csproj" />
   </ItemGroup>
 
 </Project>

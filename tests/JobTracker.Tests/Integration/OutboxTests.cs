@@ -1,7 +1,7 @@
 using System.Text.Json;
 using FluentAssertions;
 using JobTracker.Domain.Enums;
-using JobTracker.Domain.Jobs.IntegrationEvents;
+using JobTracker.Jobs.IntegrationEvents;
 using Xunit;
 
 namespace JobTracker.Tests.Integration;

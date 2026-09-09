@@ -2,6 +2,10 @@
 
 # This stage is used when running from VS in fast mode (Default for Debug configuration)
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 USER $APP_UID
 WORKDIR /app
 EXPOSE 8080
@@ -16,6 +20,7 @@ COPY ["Directory.Packages.props", "."]
 COPY ["src/JobTracker.Api/JobTracker.Api.csproj", "src/JobTracker.Api/"]
 COPY ["src/JobTracker.Application/JobTracker.Application.csproj", "src/JobTracker.Application/"]
 COPY ["src/JobTracker.Domain/JobTracker.Domain.csproj", "src/JobTracker.Domain/"]
+COPY ["src/JobTracker.Jobs.IntegrationEvents/JobTracker.Jobs.IntegrationEvents.csproj", "src/JobTracker.Jobs.IntegrationEvents/"]
 COPY ["src/JobTracker.Persistence/JobTracker.Persistence.csproj", "src/JobTracker.Persistence/"]
 RUN dotnet restore "./src/JobTracker.Api/JobTracker.Api.csproj"
 COPY . .

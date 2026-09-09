@@ -1,7 +1,7 @@
 using JobTracker.Application.Common.Correlation;
 using JobTracker.Domain.Common;
 using JobTracker.Domain.Jobs.Events;
-using JobTracker.Domain.Jobs.IntegrationEvents;
+using JobTracker.Jobs.IntegrationEvents;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Text.Json;

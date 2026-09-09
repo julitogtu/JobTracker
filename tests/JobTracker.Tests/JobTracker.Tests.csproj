@@ -31,7 +31,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\JobTracker.Api\JobTracker.Api.csproj" />
     <ProjectReference Include="..\..\src\JobTracker.Application\JobTracker.Application.csproj" />
+    <ProjectReference Include="..\..\src\JobTracker.BackgroundJob\JobTracker.BackgroundJob.csproj" />
     <ProjectReference Include="..\..\src\JobTracker.Domain\JobTracker.Domain.csproj" />
+    <ProjectReference Include="..\..\src\JobTracker.Jobs.IntegrationEvents\JobTracker.Jobs.IntegrationEvents.csproj" />
     <ProjectReference Include="..\..\src\JobTracker.Persistence\JobTracker.Persistence.csproj" />
   </ItemGroup>
 

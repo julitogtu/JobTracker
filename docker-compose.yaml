@@ -1,3 +1,8 @@
+name: jobtracker
+
+x-database-connection: &database-connection
+  ConnectionStrings__JobsDatabase: Host=postgres;Port=5432;Database=jobtracker;Username=jobtracker;Password=jobtracker_dev_password;SSL Mode=Disable
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -9,6 +14,8 @@ services:
       POSTGRES_USER: jobtracker
       POSTGRES_PASSWORD: jobtracker_dev_password
 
+    # The one port that is shared on purpose: there is a single database, and a locally run API
+    # or `dotnet ef` reaches it here on the connection string already in appsettings.json.
     ports:
       - "5432:5432"
 
@@ -25,6 +32,100 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+
+  # Applies the EF Core migrations and exits. Neither host migrates on boot, so without this the
+  # jobs schema would not exist and every request would fail. Hangfire creates its own schema.
+  migrator:
+    build:
+      context: .
+      dockerfile: src/JobTracker.Persistence/Dockerfile
+    container_name: jobtracker-migrator
+    restart: "no"
+
+    command:
+      - --connection
+      - Host=postgres;Port=5432;Database=jobtracker;Username=jobtracker;Password=jobtracker_dev_password;SSL Mode=Disable
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: src/JobTracker.Api/Dockerfile
+    container_name: jobtracker-api
+    restart: unless-stopped
+
+    environment:
+      <<: *database-connection
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: 8080
+
+    ports:
+      - "${JOBTRACKER_API_PORT:-5240}:8080"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  backgroundjob:
+    build:
+      context: .
+      dockerfile: src/JobTracker.BackgroundJob/Dockerfile
+    container_name: jobtracker-backgroundjob
+    restart: unless-stopped
+
+    environment:
+      <<: *database-connection
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: 8080
+      Notifications__SendGridApiKey: ""
+      Notifications__FallbackEmail: dev-inbox@jobtracker.local
+
+    ports:
+      - "${JOBTRACKER_BACKGROUNDJOB_PORT:-5241}:8080"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  app:
+    build:
+      context: src/JobTracker.App
+      dockerfile: Dockerfile
+    container_name: jobtracker-app
+    restart: unless-stopped
+
+    environment:
+      JOBTRACKER_API_URL: http://api:8080
+      JOBTRACKER_API_VERSION: "1.0"
+      JOBTRACKER_ORGANIZATION_ID: 8f6c1b52-1f3d-4a2e-9c77-2b1d5f0e4a10
+
+    ports:
+      - "${JOBTRACKER_APP_PORT:-3001}:3000"
+
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   jobtracker-postgres-data:

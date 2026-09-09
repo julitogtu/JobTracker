@@ -1,0 +1,13 @@
+node_modules
+.next
+out
+build
+test-results
+playwright-report
+blob-report
+.playwright
+e2e
+.env.local
+*.tsbuildinfo
+Dockerfile
+.dockerignore

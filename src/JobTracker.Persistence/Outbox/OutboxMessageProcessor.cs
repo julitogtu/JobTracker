@@ -13,7 +13,7 @@ public sealed class OutboxMessageProcessor(
 {
     private static readonly TimeSpan LockDuration = TimeSpan.FromMinutes(2);
 
-    public async Task ExecuteAsync(
+    public async Task<int> ExecuteAsync(
         int batchSize = 50,
         CancellationToken cancellationToken = default)
     {
@@ -56,6 +56,8 @@ public sealed class OutboxMessageProcessor(
 
             await dbContext.SaveChangesAsync(cancellationToken);
         }
+
+        return messages.Count;
     }
 
     private async Task<List<OutboxMessage>> ClaimBatchAsync(

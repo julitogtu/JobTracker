@@ -13,6 +13,7 @@
  */
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 const organizationId = process.env.JOBTRACKER_ORGANIZATION_ID ?? randomUUID();
 
@@ -21,7 +22,7 @@ console.log(`[jobtracker] e2e organization: ${organizationId}`);
 const child = spawn(
   process.execPath,
   [
-    new URL('../node_modules/@playwright/test/cli.js', import.meta.url).pathname.slice(1),
+    fileURLToPath(new URL('../node_modules/@playwright/test/cli.js', import.meta.url)),
     'test',
     ...process.argv.slice(2),
   ],

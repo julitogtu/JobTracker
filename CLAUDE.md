@@ -303,7 +303,15 @@ applies the migrations once. They exercise the real composition root -- `AddAppl
 Tests share one database and isolate by tenant: each test instance gets a fresh
 `OrganizationId`, and since every repository query is tenant-scoped, no truncation between tests
 is needed. Outbox rows are the exception -- the table has no organization column, so outbox
-assertions match on the job id inside the jsonb payload. A real database is not optional here:
+assertions match on the job id inside the jsonb payload.
+
+That exception has teeth, and it has broken CI twice. A test that *drains* the outbox sees every
+other test's rows too, so it must never assume its own row is in the batch it claimed: the claim
+orders by `occurred_on_utc, id`, every test shares one fixed clock so timestamps collide, and ties
+break on a random v4 id. `OutboxDispatchTests.DrainWith` therefore loops until a batch comes back
+short -- the way `OutboxDispatchJob` does -- and every assertion selects by job id rather than
+calling `Single()` on what happened to be enqueued. Both halves are required; either alone still
+flakes on ordering. A real database is not optional here:
 the stored `tsvector` column, the GIN index and the row-value keyset comparison have no
 in-memory equivalent.
 

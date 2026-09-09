@@ -78,7 +78,7 @@ public sealed class OutboxDispatchTests(PostgresFixture fixture) : IntegrationTe
     {
         var job = await CompleteAJobAsync();
 
-        await ProcessorWith(new ThrowingPublisher()).ExecuteAsync(batchSize: 10, cancellationToken: Ct);
+        await DrainWith(new ThrowingPublisher());
 
         var row = (await ReadOutboxAsync(job.Id)).Single();
 
@@ -109,8 +109,30 @@ public sealed class OutboxDispatchTests(PostgresFixture fixture) : IntegrationTe
             .Single(command => command.JobId == jobId);
 
     private Task<int> Drain() =>
-        ProcessorWith(new HangfireOutboxDispatcher(hangfire, NullLogger<HangfireOutboxDispatcher>.Instance))
-            .ExecuteAsync(batchSize: 10, cancellationToken: Ct);
+        DrainWith(new HangfireOutboxDispatcher(hangfire, NullLogger<HangfireOutboxDispatcher>.Instance));
+
+    // Drains until a batch comes back short, the way OutboxDispatchJob does, rather than taking a
+    // single batch. The outbox table has no organization column, so this test's row shares it with
+    // every other test's -- and ties on occurred_on_utc break by a random v4 id, so one batch is a
+    // lottery this row can lose. Draining everything claimable makes the assertions order-independent.
+    private async Task<int> DrainWith(IOutboxMessagePublisher publisher)
+    {
+        const int batchSize = 50;
+
+        var processor = ProcessorWith(publisher);
+        var total = 0;
+
+        for (var batch = 0; batch < 20; batch++)
+        {
+            var claimed = await processor.ExecuteAsync(batchSize, Ct);
+            total += claimed;
+
+            if (claimed < batchSize)
+                break;
+        }
+
+        return total;
+    }
 
     private OutboxMessageProcessor ProcessorWith(IOutboxMessagePublisher publisher) =>
         new(Db, publisher, Clock, NullLogger<OutboxMessageProcessor>.Instance);
